@@ -6,36 +6,17 @@ interface Point {
 }
 
 export class MathUtils {
-    static distance(p1: number[], p2: number[]): number {
-        const dx = Math.abs(p1[0] - p2[0]);
-        const dy = Math.abs(p1[1] - p2[1]);
+    static distance(p1: Point, p2: Point): number {
+        const dx = Math.abs(p1.x - p2.x);
+        const dy = Math.abs(p1.y - p2.y);
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    static fastDistance(p1: number[], p2: number[]): number {
-        const dx = Math.abs(p1[0] - p2[0]);
-        const dy = Math.abs(p1[1] - p2[1]);
-        return (dx * dx + dy * dy);
-    }
-
-    static fastPointDistance(p1: Point, p2: Point): number {
-        const dx = Math.abs(p1.x - p2.x);
-        const dy = Math.abs(p1.y - p2.y);
-        return (dx * dx + dy * dy);
-    }
-
-    static angle(p1: number[], p2: number[]): number {
-        const angleRadians = Math.atan2(p2[0] - p1[1], p2[0] - p1[0]);
-        const angleDeg = angleRadians * 180 / Math.PI;
-        return angleDeg;
-    }
-
-    static angleOfPoints(p1: Point, p2: Point): number {
+    static angle(p1: Point, p2: Point): number {
         const angleRadians = Math.atan2(p2.x - p1.y, p2.x - p1.x);
         const angleDeg = angleRadians * 180 / Math.PI;
         return angleDeg;
     }
-
 
     static averageValue(points: number[]): number {
         return points.reduce((a, b) => (a + b)) / points.length;
@@ -91,11 +72,11 @@ export class MathUtils {
         return [avgX, avgY];
     }
 
-    static closestPoint(points: number[][], point: number[]): any {
+    static closestPoint(points: Point[], point: Point): any {
         let closest = 0;
-        let min = this.fastDistance(points[0], point);
+        let min = this.distance(points[0], point);
         for (let i = 0; i < points.length; i++) {
-            const d = this.fastDistance(points[i], point);
+            const d = this.distance(points[i], point);
             if (d < min) { min = d; closest = i; }
         }
         return { point: points[closest], fastDistance: min };
@@ -105,10 +86,10 @@ export class MathUtils {
         let closest = 0;
         let side = 'a';
         if (rects[0]) {
-            let min = this.fastPointDistance(rects[0][from], rect.a);
+            let min = this.distance(rects[0][from], rect.a);
             for (let i = 0; i < rects.length; i++) {
-                const dA = this.fastPointDistance(rects[i].a, rect.a);
-                const dB = this.fastPointDistance(rects[i].a, rect.b);
+                const dA = this.distance(rects[i].a, rect.a);
+                const dB = this.distance(rects[i].a, rect.b);
                 if (dA < dB && dA < min) {
                     min = dA; closest = i; side = 'a';
                 } else  if (dB < dA && dB < min) {
@@ -159,29 +140,13 @@ export class MathUtils {
         return points.sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
     }
 
-    static shuffleArray(array: Array<any>) {
+    static shuffleArray(array: Array<any>): void {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             const temp = array[i];
             array[i] = array[j];
             array[j] = temp;
         }
-    }
-
-    static intersectionOverUnion(boxA, boxB) {
-        const xA = Math.max(boxA[0], boxB[0]);
-        const yA = Math.max(boxA[1], boxB[1]);
-        const xB = Math.min(boxA[2], boxB[2]);
-        const yB = Math.min(boxA[3], boxB[3]);
-
-        const interArea = (xB - xA + 1) * (yB - yA + 1);
-
-        const boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1);
-        const boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1);
-
-        const iou = interArea / (boxAArea + boxBArea - interArea);
-
-        return iou;
     }
 
 }

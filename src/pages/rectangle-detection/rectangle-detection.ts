@@ -1,8 +1,7 @@
-import { Component, ViewChild, OnInit, ElementRef, HostListener } from '@angular/core';
-import { VideoTracker } from '../../libraries/rectangle-detector/video-tracker';
+import { Component, ViewChild, OnInit, ElementRef } from '@angular/core';
 
-import * as jsfeat from 'jsfeat';
-import { ImageUtils, GrayImageData } from '../../libraries/image-utils/image-utils';
+import { VideoTracker } from '../../libraries/rectangle-detector/video-tracker';
+import { ImageUtils } from '../../libraries/image-utils/image-utils';
 import { HoughTransform, Point } from '../../libraries/math-utils/hough-transform';
 import { MathUtils } from '../../libraries/math-utils/math-utils';
 import { CanvasUtils } from '../../libraries/canvas-utils/canvas-utils';
@@ -20,6 +19,8 @@ export class RectangleDetectionComponent implements OnInit {
     private canvas: HTMLCanvasElement;
 
     private tracker: VideoTracker;
+
+    private mirrored = true;
 
     constructor() { }
 
@@ -44,7 +45,8 @@ export class RectangleDetectionComponent implements OnInit {
 
     initTracker() {
         const context: CanvasRenderingContext2D = this.canvas.getContext('2d');
-
+        context.imageSmoothingEnabled = true;
+        if (this.mirrored) { this.video.style.cssText = 'transform: scale(-1, 1);'; }
         this.tracker = new VideoTracker(this.video);
         this.tracker.on('track', (event) => {
             const image = event.image;
@@ -56,43 +58,22 @@ export class RectangleDetectionComponent implements OnInit {
             if (this.canvas.width !== width || this.canvas.height !== height) { this.onSizeChange(width, height); }
 
             context.clearRect(0, 0, width, height);
-            CanvasUtils.drawCardFilter(context);
 
-            // const sample2 = ImageUtils.sobel(sample);
-            // const test = new GrayImageData(sample2.data, sample2.width, sample2.height);
-            // const sample3 = ImageUtils.nonMaximumSuppression(test);
-
-            // context.putImageData(sample, 0, 0);
-
-            const sobel = ImageUtils.sobel(sample);
-            const grayscale = ImageUtils.grayscale(sobel);
-            const invert = ImageUtils.invert(grayscale);
-            const thres = ImageUtils.threshold(invert, 200, 0, 255);
-
-            const img_u8 = new jsfeat.matrix_t(sample.width, image.height, jsfeat.U8C1_t);
-
-            // tslint:disable-next-line:no-bitwise
-            const kernel_size = (4 + 1) << 1;
-
-            jsfeat.imgproc.grayscale(sample.data, sample.width, sample.height, img_u8);
-            jsfeat.imgproc.gaussian_blur(img_u8, img_u8, kernel_size, 0);
-            jsfeat.imgproc.canny(img_u8, img_u8, 20, 100);
-
-            // render result back to canvas
-            const data_u32 = new Uint32Array(sample.data.buffer);
-            // tslint:disable-next-line:no-bitwise
-            const alpha = (0xff << 24);
-            let i = img_u8.cols * img_u8.rows, pix = 0;
-            while (--i >= 0) {
-                pix = img_u8.data[i];
-                // tslint:disable-next-line:no-bitwise
-                data_u32[i] = alpha | (pix << 16) | (pix << 8) | pix;
+            context.save();
+            if (this.mirrored) {
+                context.translate(this.canvas.width, 0);
+                context.scale(-1, 1);
             }
 
-            context.putImageData(thres, 0, 0);
-            context.putImageData(sample, sample.width, 0);
+            CanvasUtils.drawCardFilter(context);
 
-            const mono = ImageUtils.toMonoChannelTolerant(thres);
+            const sobel = ImageUtils.sobel(sample);
+            const thres = ImageUtils.threshold(sobel, 50, 0, 255); // Play with the threshold to improve detection
+            const invert = ImageUtils.invert(thres);
+            // const thres = ImageUtils.threshold(invert, 200, 0, 255);
+            const mono = ImageUtils.toMonoChannel(invert);
+
+            context.putImageData(invert, 0, 0);
 
             // image	        image data in 8-bit, single-channel binary source image.
             // colCount         image width.
@@ -116,7 +97,7 @@ export class RectangleDetectionComponent implements OnInit {
             );
             this.drawLines(context, rects);
 
-            
+
             const margin = 5;
 
             const scale = 0.85;
@@ -168,6 +149,7 @@ export class RectangleDetectionComponent implements OnInit {
             if (top && right && bottom && left) {
                 console.log('YASSSSSSSSSSSSSSS');
             }
+            context.restore();
         });
         this.tracker.run();
     }
@@ -201,23 +183,24 @@ export class RectangleDetectionComponent implements OnInit {
         }
 
 
-        // let points = [];
-        // for (let i = 0; i < rects.length; i++) {
-        //     for (let j = 0; j < rects.length; j++) {
-        //         if (i !== j) {
-        //             const point = this.line_intersect(
-        //                 rects[i].p1[0], rects[i].p1[1], rects[i].p2[0], rects[i].p2[1],
-        //                 rects[j].p1[0], rects[j].p1[1], rects[j].p2[0], rects[j].p2[1]
-        //             );
-
-        //             if (point) {
-        //                 points.push(point);
-        //                 context.fillStyle = 'rgba(0,255,0,1)';
-        //                 context.fillRect(point.x, point.y, 4, 4);
-        //             }
-        //         }
-        //     }
-        // }
+        const points = [];
+        for (let i = 0; i < rects.length; i++) {
+            for (let j = 0; j < rects.length; j++) {
+                if (i !== j) {
+                    const point = this.line_intersect(
+                        rects[i].a.x, rects[i].a.y, rects[i].b.x, rects[i].b.y,
+                        rects[j].a.x, rects[j].a.y, rects[j].b.x, rects[j].b.y
+                    );
+                    // const distance = MathUtils.distance(p1, p2);
+                    if (point) {
+                        if (point.x < 0 || point.x > 220 || point.y < 0 || point.y > 220 / 1.586) { continue; }
+                        points.push(point);
+                        context.fillStyle = 'rgba(0,255,0,1)';
+                        context.fillRect(point.x, point.y, 4, 4);
+                    }
+                }
+            }
+        }
 
         // const sum = [];
         // // points = this.sortPoints(points);
