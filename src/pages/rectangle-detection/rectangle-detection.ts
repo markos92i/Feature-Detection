@@ -1,5 +1,7 @@
 import { Component, ViewChild, OnInit, ElementRef } from '@angular/core';
 
+import * as jsfeat from 'jsfeat';
+
 import { VideoTracker } from '../../libraries/rectangle-detector/video-tracker';
 import { ImageUtils } from '../../libraries/image-utils/image-utils';
 import { HoughTransform, Point } from '../../libraries/math-utils/hough-transform';
@@ -20,7 +22,7 @@ export class RectangleDetectionComponent implements OnInit {
 
     private tracker: VideoTracker;
 
-    private mirrored = true;
+    private mirrored = false;
 
     constructor() { }
 
@@ -67,13 +69,35 @@ export class RectangleDetectionComponent implements OnInit {
 
             CanvasUtils.drawCardFilter(context);
 
-            const sobel = ImageUtils.sobel(sample);
-            const thres = ImageUtils.threshold(sobel, 50, 0, 255); // Play with the threshold to improve detection
-            const invert = ImageUtils.invert(thres);
-            // const thres = ImageUtils.threshold(invert, 200, 0, 255);
-            const mono = ImageUtils.toMonoChannel(invert);
+            // const sobel = ImageUtils.sobel(sample);
+            // const thres = ImageUtils.threshold(sobel, 35, 0, 255); // Play with the threshold to improve detection
+            // const invert = ImageUtils.invert(thres);
+            // const mono = ImageUtils.toMonoChannel(invert);
 
-            context.putImageData(invert, 0, 0);
+
+            const img_u8 = new jsfeat.matrix_t(sample.width, image.height, jsfeat.U8C1_t);
+
+            // tslint:disable-next-line:no-bitwise
+            const kernel_size = (2 + 1) << 1;
+
+            jsfeat.imgproc.grayscale(sample.data, sample.width, sample.height, img_u8);
+            jsfeat.imgproc.gaussian_blur(img_u8, img_u8, kernel_size, 0);
+            jsfeat.imgproc.canny(img_u8, img_u8, 20, 127);
+
+            // render result back to canvas
+            const data_u32 = new Uint32Array(sample.data.buffer);
+            // tslint:disable-next-line:no-bitwise
+            const alpha = (0xff << 24);
+            let i = img_u8.cols * img_u8.rows, pix = 0;
+            while (--i >= 0) {
+                pix = img_u8.data[i];
+                // tslint:disable-next-line:no-bitwise
+                data_u32[i] = alpha | (pix << 16) | (pix << 8) | pix;
+            }
+            const mono2 = ImageUtils.toMonoChannel(sample);
+
+            context.putImageData(sample, 0, 0);
+            // context.putImageData(invert, 0, 0);
 
             // image	        image data in 8-bit, single-channel binary source image.
             // colCount         image width.
@@ -85,94 +109,71 @@ export class RectangleDetectionComponent implements OnInit {
             // maxLineGap	    maximum allowed gap between points on the same line to link them.
             // maxLines         maximum number or lines retrieved by the function
             const rects = HoughTransform.probabilisticHoughTransform(
-                mono.data,
-                mono.width,
-                mono.height,
+                mono2.data,
+                sample.width,
+                sample.height,
                 1,
-                Math.PI / 90,
+                Math.PI / 180,
                 50,
                 50,
-                2,
-                30
+                10,
+                50
             );
             this.drawLines(context, rects);
+            const quadrilaterals = this.getQuadrilaterals(rects);
+            // let minArea = 0, best;
+            // for (let q = 0; q < quadrilaterals.length; q++) {
+            //     const area = MathUtils.polygonArea(quadrilaterals[q]);
+            //     if (area > minArea) {
+            //         minArea = area;
+            //         best = q;
+            //     }
+            // }
+            // this.fillQuadrilateral(context, quadrilaterals[best]);
+            this.fillQuadrilaterals(context, quadrilaterals);
 
+            // const margin = 5;
 
-            const margin = 5;
+            // const scale = 0.85;
+            // const ratio = 1.586;
 
-            const scale = 0.85;
-            const ratio = 1.586;
+            // const w = sample.width * scale;
+            // const h = w / ratio;
+            // const x = (sample.width * 0.5) - (w / 2);
+            // const y = (sample.height * 0.5) - (h / 2);
 
-            const w = mono.width * scale;
-            const h = w / ratio;
-            const x = (mono.width * 0.5) - (w / 2);
-            const y = (mono.height * 0.5) - (h / 2);
+            // const areaTop =     { from: { x: x - margin,        y: y - margin },      to: { x: x + w + margin,    y: y + margin } };
+            // const areaRight =   { from: { x: x + w - margin,    y: y - margin },      to: { x: x + w + margin,    y: y + h + margin } };
+            // const areaBottom =  { from: { x: x - margin,        y: y + h - margin },  to: { x: x + w + margin,    y: y + h + margin } };
+            // const areaLeft =    { from: { x: x - margin,        y: y - margin },      to: { x: x + margin,        y: y + h + margin } };
 
-            const areaTop = {
-                from:   { x: x - margin,        y: y - margin },
-                to:     { x: x + w + margin,    y: y + margin }
-            };
-            const areaRight = {
-                from:   { x: x + w - margin,    y: y - margin },
-                to:     { x: x + w + margin,    y: y + h + margin }
-            };
-            const areaBottom = {
-                from:   { x: x - margin,        y: y + h - margin },
-                to:     { x: x + w + margin,    y: y + h + margin }
-            };
-            const areaLeft = {
-                from:   { x: x - margin,        y: y - margin },
-                to:     { x: x + margin,        y: y + h + margin }
-            };
-            // this.fillArea(context, areaTop.from, areaTop.to);
-            // this.fillArea(context, areaRight.from, areaRight.to);
-            // this.fillArea(context, areaBottom.from, areaBottom.to);
-            // this.fillArea(context, areaLeft.from, areaLeft.to);
+            // let top = false, right = false, bottom = false, left = false;
+            // for (let a = 0; a < rects.length; a++) {
+            //     if (MathUtils.isRectInArea(rects[a], areaTop.from, areaTop.to)) {
+            //         top = true;
+            //         this.fillArea(context, areaTop.from, areaTop.to);
+            //     } else if (MathUtils.isRectInArea(rects[a], areaRight.from, areaRight.to)) {
+            //         right = true;
+            //         this.fillArea(context, areaRight.from, areaRight.to);
+            //     } else if (MathUtils.isRectInArea(rects[a], areaBottom.from, areaBottom.to)) {
+            //         bottom = true;
+            //         this.fillArea(context, areaBottom.from, areaBottom.to);
+            //     } else if (MathUtils.isRectInArea(rects[a], areaLeft.from, areaLeft.to)) {
+            //         left = true;
+            //         this.fillArea(context, areaLeft.from, areaLeft.to);
+            //     }
+            // }
 
-            let top = false, right = false, bottom = false, left = false;
-            for (let a = 0; a < rects.length; a++) {
-                if (MathUtils.isRectInArea(rects[a], areaTop.from, areaTop.to)) {
-                    top = true;
-                    this.fillArea(context, areaTop.from, areaTop.to);
-                } else if (MathUtils.isRectInArea(rects[a], areaRight.from, areaRight.to)) {
-                    right = true;
-                    this.fillArea(context, areaRight.from, areaRight.to);
-                } else if (MathUtils.isRectInArea(rects[a], areaBottom.from, areaBottom.to)) {
-                    bottom = true;
-                    this.fillArea(context, areaBottom.from, areaBottom.to);
-                } else if (MathUtils.isRectInArea(rects[a], areaLeft.from, areaLeft.to)) {
-                    left = true;
-                    this.fillArea(context, areaLeft.from, areaLeft.to);
-                }
-            }
-
-            if (top && right && bottom && left) {
-                console.log('YASSSSSSSSSSSSSSS');
-            }
+            // if (top && right && bottom && left) {
+            //     console.log('CAPTURE?');
+            // }
             context.restore();
         });
         this.tracker.run();
     }
 
-    line_intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
-        let ua, ub;
-        const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
-        if (denom === 0) {
-            return null;
-        }
-        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
-        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
-        return {
-            x: x1 + ua * (x2 - x1),
-            y: y1 + ua * (y2 - y1),
-            seg1: ua >= 0 && ua <= 1,
-            seg2: ub >= 0 && ub <= 1
-        };
-    }
-
     drawLines(context: CanvasRenderingContext2D, rects) {
         for (let i = 0; i < rects.length; i++) {
-            // console.log(JSON.stringify(rects[i]));
             context.beginPath();
             context.moveTo(rects[i].a.x, rects[i].a.y);
             context.lineTo(rects[i].b.x, rects[i].b.y);
@@ -181,115 +182,139 @@ export class RectangleDetectionComponent implements OnInit {
             context.stroke();
             context.strokeStyle = 'rgba(0,0,0,1)';
         }
+    }
 
-
-        const points = [];
+    getQuadrilaterals(rects) {
+        const corners = [];
         for (let i = 0; i < rects.length; i++) {
             for (let j = 0; j < rects.length; j++) {
                 if (i !== j) {
-                    const point = this.line_intersect(
-                        rects[i].a.x, rects[i].a.y, rects[i].b.x, rects[i].b.y,
-                        rects[j].a.x, rects[j].a.y, rects[j].b.x, rects[j].b.y
-                    );
-                    // const distance = MathUtils.distance(p1, p2);
+                    const point = MathUtils.lineIntersect(rects[i], rects[j]);
                     if (point) {
+                        // const angle = Math.abs(MathUtils.angleOfThree(point, rects[i].a, rects[j].a));
+                        // if (angle > 120) { continue; }
                         if (point.x < 0 || point.x > 220 || point.y < 0 || point.y > 220 / 1.586) { continue; }
-                        points.push(point);
-                        context.fillStyle = 'rgba(0,255,0,1)';
-                        context.fillRect(point.x, point.y, 4, 4);
+                        corners.push([rects[i], rects[j]]);
+                        // points.push(point);
+                        // context.fillStyle = 'rgba(0,255,0,1)';
+                        // context.fillRect(point.x, point.y, 4, 4);
                     }
                 }
             }
         }
 
-        // const sum = [];
-        // // points = this.sortPoints(points);
-
-        // const test = rects.slice();
-        // while (test.length) {
-        //     const p1 = test.pop();
-        //     const remaining = test.slice();
-        //     const angle1 = MathUtils.angleOfPoints(p1.a, p1.b);
-
-        //     let closest = MathUtils.closestRect(remaining, p1, 'a');
-        //     if (!closest.point) { break; }
-        //     let next = closest.side === 'a' ? 'b' : 'a';
-        //     remaining.splice(closest.index, 1);
-        //     const p2 = closest.point;
-        //     const angle2 = MathUtils.angleOfPoints(p2.a, p2.b);
-
-        //     closest = MathUtils.closestRect(remaining, p2, next);
-        //     if (!closest.point) { break; }
-        //     next = closest.side === 'a' ? 'b' : 'a';
-        //     remaining.splice(closest.index, 1);
-        //     const p3 = closest.point;
-        //     const angle3 = MathUtils.angleOfPoints(p3.a, p3.b);
-
-        //     closest = MathUtils.closestRect(remaining, p3, next);
-        //     if (!closest.point) { break; }
-        //     // next = closest.side === 'a' ? 'b' : 'a';
-        //     // test.splice(closest.index, 1);
-        //     const p4 = closest.point;
-        //     const angle4 = MathUtils.angleOfPoints(p4.a, p4.b);
-
-        //     console.log('ANGLES DIFFERENCES: A1: ' + angle1 + ' A2: ' + angle2 + ' A3: ' + angle3 + ' A4: ' + angle4);
-
-
-        //     sum.push([p1, p2, p3, p4]);
-        // }
-
-        /*
-        // Draw biggest area
-        corners = this.sortPoints(corners);
-        for (let i = 0; i < 4; i++) {
-            context.save();
-            context.fillStyle = 'rgba(0,0,255,0.3)';
-            context.beginPath();
-            context.moveTo(corners[0].x, corners[0].y);
-            context.lineTo(corners[1].x, corners[1].y);
-            context.lineTo(corners[2].x, corners[2].y);
-            context.lineTo(corners[3].x, corners[3].y);
-            context.lineTo(corners[0].x, corners[0].y);
-            context.closePath();
-            context.fill();
-            context.restore();
-        }
-
-        */
-        /*
-        points.sort( (a, b) => {
-            if (a.x === b.x) { return a.y - b.y; }
-            return a.x - b.x;
-        });
-
-        /*
-        for (let i = 0; i < points.length / 2; i++) {
-            for (let j = 0; j < points.length / 2; j++) {
+        // Second phase where we check if those pairs collide 2 by 2
+        const candidates = [];
+        for (let i = 0; i < corners.length; i++) {
+            for (let j = 0; j < corners.length; j++) {
                 if (i !== j) {
-                    const width = Math.abs(points[i].x - points[j].x);
-                    const height = Math.abs(points[i].y - points[j].y);
-                    const ratio = width / height;
+                    // First Pair
+                    const rect1 = corners[i][0];
+                    const rect2 = corners[i][1];
 
-                    if (ratio > 1.5  && ratio < 1.65) {
-                        context.save();
-                        context.fillStyle = 'rgba(0,255,0,0.1)';
-                        if (points[i].x < points[j].x) {
-                            context.fillRect(points[i].x, points[i].y, width, height);
-                        } else {
-                            context.fillRect(points[j].x, points[j].y, width, height);
+                    // Second Pair
+                    const rect3 = corners[j][0];
+                    const rect4 = corners[j][1];
+
+                    const pointA = MathUtils.lineIntersect(rect1, rect2);
+                    const pointB = MathUtils.lineIntersect(rect3, rect4);
+                    const pointC = MathUtils.lineIntersect(rect1, rect3) || MathUtils.lineIntersect(rect1, rect4);
+                    const pointD = MathUtils.lineIntersect(rect2, rect4) || MathUtils.lineIntersect(rect2, rect3);
+
+                    if (pointA && pointB && pointC && pointD) {
+                        const diagonalA = { a: pointA, b: pointB };
+                        const diagonalB = { a: pointC, b: pointD };
+                        const center = MathUtils.lineIntersect(diagonalA, diagonalB);
+
+                        if (!center) { continue; }
+                        if (pointA.x < 0 || pointA.x > 220 || pointA.y < 0 || pointA.y > 220 / 1.586) { continue; }
+                        if (pointB.x < 0 || pointB.x > 220 || pointB.y < 0 || pointB.y > 220 / 1.586) { continue; }
+                        if (pointC.x < 0 || pointC.x > 220 || pointC.y < 0 || pointC.y > 220 / 1.586) { continue; }
+                        if (pointD.x < 0 || pointD.x > 220 || pointD.y < 0 || pointD.y > 220 / 1.586) { continue; }
+
+                        // const A = Math.abs(MathUtils.angleOfThree(pointC, pointA, pointB));
+                        // const B = Math.abs(MathUtils.angleOfThree(pointB, pointC, pointD));
+                        // const C = Math.abs(MathUtils.angleOfThree(pointD, pointB, pointA));
+                        // const D = Math.abs(MathUtils.angleOfThree(pointA, pointD, pointC));
+
+                        const A = Math.abs(MathUtils.find_angle(pointC, pointD, pointA));
+                        const B = Math.abs(MathUtils.find_angle(pointC, pointD, pointB));
+                        const C = Math.abs(MathUtils.find_angle(pointA, pointB, pointC));
+                        const D = Math.abs(MathUtils.find_angle(pointA, pointB, pointD));
+
+                        if (A > 135 || B > 135 || C > 135 || D > 135) { continue; }
+                        if (A < 45 || B < 45 || C < 45 || D < 45) { continue; }
+
+                        const total = Math.round(A + B + C + D);
+                        if (total === 360) {
+                            const width = MathUtils.distance(pointA, pointC);
+                            const height = MathUtils.distance(pointA, pointD);
+                            const ratio = Math.round((width / height) * 100) / 100;
+
+                            const w = center.x, h = center.y;
+                            const matrix = MathUtils.general2DProjection(
+                                0, 0, pointA.x, pointA.y, w, 0, pointC.x, pointC.y, 0, h, pointB.x, pointB.y, w, h, pointD.x, pointD.y
+                            );
+
+                            const matrix3d = MathUtils.transform2d(
+                                center, pointA.x, pointA.y, pointC.x, pointC.y, pointB.x, pointB.y, pointD.x, pointD.y
+                            );
+
+                            //      | a  b  tx |
+                            // A =  | c  d  ty |
+                            //      | 0  0  1  |
+
+                            // const decomposition = MathUtils.decomposeMatrix(
+                            //     {
+                            //         a: A,
+                            //         b: B,
+                            //         c: C,
+                            //         d: D,
+                            //         e: center.x,
+                            //         f: center.y
+                            //     }
+                            // );
+                            // console.log(JSON.stringify(matrix));
+                            if (ratio === 1.58) {
+                                candidates.push([pointA, pointC, pointB, pointD]);
+                            }
+
+                            // context.fillStyle = 'rgba(0,255,0,1)';
+                            // context.fillRect(pointA.x, pointA.y, 4, 4);
+                            // context.fillRect(pointB.x, pointB.y, 4, 4);
+                            // context.fillRect(pointC.x, pointC.y, 4, 4);
+                            // context.fillRect(pointD.x, pointD.y, 4, 4);
                         }
-                        context.restore();
                     }
                 }
             }
         }
-        */
+        return candidates;
+    }
 
+    fillQuadrilateral(context: CanvasRenderingContext2D, quadrilateral: Point[]) {
+        context.save();
+        context.fillStyle = 'rgba(0,0,255,0.5)';
+        context.beginPath();
+        context.moveTo(quadrilateral[0].x, quadrilateral[0].y);
+        context.lineTo(quadrilateral[1].x, quadrilateral[1].y);
+        context.lineTo(quadrilateral[2].x, quadrilateral[2].y);
+        context.lineTo(quadrilateral[3].x, quadrilateral[3].y);
+        context.lineTo(quadrilateral[0].x, quadrilateral[0].y);
+        context.closePath();
+        context.fill();
+        context.restore();
+    }
+
+    fillQuadrilaterals(context: CanvasRenderingContext2D, quadrilaterals: Point[][]) {
+        for (let i = 0; i < quadrilaterals.length; i++) {
+            this.fillQuadrilateral(context, quadrilaterals[i]);
+        }
     }
 
     fillArea(context: CanvasRenderingContext2D, from: Point, to: Point) {
         context.save();
-        context.fillStyle = 'rgba(0,255,0,0.5)';
+        context.fillStyle = 'rgba(0,255,0,0.1)';
         context.beginPath();
         context.moveTo(from.x, from.y);
         context.lineTo(to.x, from.y);
