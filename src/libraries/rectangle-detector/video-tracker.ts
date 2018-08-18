@@ -6,6 +6,8 @@ export class VideoTracker extends EventEmitter {
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
 
+    private image: ImageData;
+
     constructor(source: HTMLVideoElement) {
         super();
         this.video = source;
@@ -17,35 +19,30 @@ export class VideoTracker extends EventEmitter {
     }
 
     private setUpCanvas() {
+        const width = this.video.videoWidth;
+        const height = this.video.videoHeight;
+        const ratio = width / height;
+
+        this.image = new ImageData(width, height);
+
         this.canvas = document.createElement('canvas');
-        this.canvas.width = this.video.videoWidth;
-        this.canvas.height = this.video.videoHeight;
+        this.canvas.width = 200;
+        this.canvas.height = 200 / ratio;
         this.context = this.canvas.getContext('2d');
+        this.context.imageSmoothingEnabled = true;
     }
 
-    private requestFrame = () => {
-        this.requestId = window.requestAnimationFrame(() => {
-            if (this.video.readyState === this.video.HAVE_ENOUGH_DATA && this.canvas) {
-                const width = this.canvas.width;
-                const height = this.canvas.height;
-                const ratio = width / height;
-
-                this.context.drawImage(this.video, 0, 0, width, height);
-                const image = this.context.getImageData(0, 0, width, height);
-
-                const p_width = 220;
-                const p_height = p_width / ratio;
-
-                this.context.drawImage(this.video, 0, 0, p_width, p_height);
-                const sample = this.context.getImageData(0, 0, p_width, p_height);
-
-                this.track(image, sample);
+    private requestFrame() {
+        this.requestId = requestAnimationFrame(() => {
+            if (this.canvas) {
+                this.context.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+                const preview = this.context.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                this.track(this.image, preview);
             }
             this.requestFrame();
         });
     }
-
-    private cancelFrame = () => {
+    private cancelFrame() {
         window.cancelAnimationFrame(this.requestId);
     }
 

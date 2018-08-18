@@ -7,7 +7,7 @@ interface Bounds {
 export class CanvasUtils {
 
     // Maniputale canvas ============================================================
-    public static rotate(context: CanvasRenderingContext2D, degree, rotatePoint) {
+    static rotate(context: CanvasRenderingContext2D, degree, rotatePoint) {
         context.translate(rotatePoint.x, rotatePoint.y);
         context.rotate(degree * Math.PI / 180);
         context.translate(-rotatePoint.x, -rotatePoint.y);
@@ -28,12 +28,12 @@ export class CanvasUtils {
         r: number
     ) {
         context.moveTo(x + r, y);
-        context.arcTo(x + w,  y,     x + w, y + h, r);
-        context.arcTo(x + w,  y + h, x,     y + h, r);
-        context.arcTo(x,      y + h, x,     y,     r);
-        context.arcTo(x,      y,     x + w, y,     r);
+        context.arcTo(x + w, y, x + w, y + h, r);
+        context.arcTo(x + w, y + h, x, y + h, r);
+        context.arcTo(x, y + h, x, y, r);
+        context.arcTo(x, y, x + w, y, r);
     }
-    public static drawFeatureFrame(
+    static drawFeatureFrame(
         context: CanvasRenderingContext2D,
         x: number, y: number,
         w: number, h: number,
@@ -76,19 +76,28 @@ export class CanvasUtils {
 
 
     // Draw card ============================================================
-    private static cardBounds(width: number, height: number, scale: number): Bounds {
+    static cardBounds(width: number, height: number, scale: number): Bounds {
         const ratio = 1.586;
 
-        const w = width * scale;
-        const h = w / ratio;
-        const x = (width * 0.5) - (w / 2);
-        const y = (height * 0.5) - (h / 2);
+        let w, h, x, y;
+
+        if (width > height) {
+            h = height * scale;
+            w = h * ratio;
+            x = (width * 0.5) - (w / 2);
+            y = (height * 0.5) - (h / 2);
+        } else {
+            w = width * scale;
+            h = w / ratio;
+            x = (width * 0.5) - (w / 2);
+            y = (height * 0.5) - (h / 2);
+        }
 
         const bounds = { x, y, width: w, height: h };
         return bounds;
     }
 
-    public static drawCardFilterWith(context: CanvasRenderingContext2D, scale: number, fillStyle: string, strokeStyle: string) {
+    static drawCardFilterWith(context: CanvasRenderingContext2D, scale: number, fillStyle: string, strokeStyle: string) {
         const width = context.canvas.width;
         const height = context.canvas.height;
 
@@ -96,11 +105,11 @@ export class CanvasUtils {
         this.drawFilterWith(context, bounds, scale, fillStyle, strokeStyle);
     }
 
-    public static drawCardFilter(context: CanvasRenderingContext2D) {
-        this.drawCardFilterWith(context, 0.85, 'rgba(0,0,0,0.8)', 'rgba(255,255,255,0.8)');
+    static drawCardFilter(context: CanvasRenderingContext2D, scale) {
+        this.drawCardFilterWith(context, scale, 'rgba(0,0,0,0.8)', 'rgba(255,255,255,0.8)');
     }
 
-    public static drawCardBorderWith(context: CanvasRenderingContext2D, scale: number, strokeStyle: string) {
+    static drawCardBorderWith(context: CanvasRenderingContext2D, scale: number, strokeStyle: string) {
         const width = context.canvas.width;
         const height = context.canvas.height;
 
@@ -111,18 +120,18 @@ export class CanvasUtils {
         this.drawFeatureFrame(context, x, y, w, h, r, strokeStyle);
     }
 
-    public static drawCardDetection(context: CanvasRenderingContext2D, x, y, w, h) {
+    static drawCardDetection(context: CanvasRenderingContext2D, x, y, w, h) {
         const r = w * 0.05;
 
         this.drawFeatureFrame(context, x, y, w, h, r, 'rgba(255,0,0,1)');
     }
 
-    public static drawCardHighlight(context: CanvasRenderingContext2D) {
-        this.drawCardBorderWith(context, 0.6, 'rgba(255,102,0,1)');
+    static drawCardHighlight(context: CanvasRenderingContext2D, scale) {
+        this.drawCardBorderWith(context, scale, 'rgba(255,102,0,1)');
     }
 
-    public static drawCardSuccess(context: CanvasRenderingContext2D) {
-        this.drawCardBorderWith(context, 0.6, 'rgba(0,255,0,1)');
+    static drawCardSuccess(context: CanvasRenderingContext2D, scale) {
+        this.drawCardBorderWith(context, scale, 'rgba(0,255,0,1)');
     }
 
 
@@ -137,7 +146,7 @@ export class CanvasUtils {
         return bounds;
     }
 
-    public static drawFaceFilterWith(context: CanvasRenderingContext2D, scale: number, fillStyle: string, strokeStyle: string) {
+    static drawFaceFilterWith(context: CanvasRenderingContext2D, scale: number, fillStyle: string, strokeStyle: string) {
         const width = context.canvas.width;
         const height = context.canvas.height;
 
@@ -145,11 +154,11 @@ export class CanvasUtils {
         this.drawFilterWith(context, bounds, scale, fillStyle, strokeStyle);
     }
 
-    public static drawFaceFilter(context) {
-        this.drawFaceFilterWith(context, 0.85, 'rgba(0,0,0,0.8)', 'rgba(255,255,255,0.8)');
+    static drawFaceFilter(context, scale) {
+        this.drawFaceFilterWith(context, scale, 'rgba(0,0,0,0.8)', 'rgba(255,255,255,0.8)');
     }
 
-    public static drawFaceBorderWith(context: CanvasRenderingContext2D, scale: number, strokeStyle: string) {
+    static drawFaceBorderWith(context: CanvasRenderingContext2D, scale: number, strokeStyle: string) {
         const width = context.canvas.width;
         const height = context.canvas.height;
 
@@ -160,12 +169,12 @@ export class CanvasUtils {
         this.drawFeatureFrame(context, x, y, w, h, r, strokeStyle);
     }
 
-    public static drawFaceHighlight(context: CanvasRenderingContext2D) {
-        this.drawFaceBorderWith(context, 0.85, 'rgba(255,102,0,1)');
+    static drawFaceHighlight(context: CanvasRenderingContext2D, scale) {
+        this.drawFaceBorderWith(context, scale, 'rgba(255,102,0,1)');
     }
 
-    public static drawFaceSuccess(context: CanvasRenderingContext2D) {
-        this.drawFaceBorderWith(context, 0.85, 'rgba(0,255,0,1)');
+    static drawFaceSuccess(context: CanvasRenderingContext2D, scale) {
+        this.drawFaceBorderWith(context, scale, 'rgba(0,255,0,1)');
     }
 
 }

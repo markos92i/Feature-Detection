@@ -20,16 +20,10 @@ export class MathUtils {
         return angleDeg;
     }
 
-    // static angleOfThree(p1: Point, p2: Point, p3: Point): number {
-    //     const angleRadians = Math.atan2(p3.y - p1.y, p3.x - p1.x) - Math.atan2(p2.y - p1.y, p2.x - p1.x);
-    //     const angleDeg = angleRadians * 180 / Math.PI;
-    //     return angleDeg;
-    // }
-
-    static find_angle(p0: Point, p1: Point, center: Point): number {
+    static cornerAngle(p0: Point, p1: Point, center: Point): number {
         const p0c = Math.sqrt(Math.pow(center.x - p0.x, 2) + Math.pow(center.y - p0.y, 2)); // p0->c (b)
         const p1c = Math.sqrt(Math.pow(center.x - p1.x, 2) + Math.pow(center.y - p1.y, 2)); // p1->c (a)
-        const p0p1 = Math.sqrt(Math.pow(p1.x - p0.x, 2) +  Math.pow(p1.y - p0.y, 2)); // p0->p1 (c)
+        const p0p1 = Math.sqrt(Math.pow(p1.x - p0.x, 2) + Math.pow(p1.y - p0.y, 2)); // p0->p1 (c)
         const angleRadians = Math.acos((p1c * p1c + p0c * p0c - p0p1 * p0p1) / (2 * p1c * p0c));
         const angleDeg = angleRadians * 180 / Math.PI;
         return angleDeg;
@@ -89,14 +83,14 @@ export class MathUtils {
         return [avgX, avgY];
     }
 
-    static closestPoint(points: Point[], point: Point): any {
+    static closestPoint(points: Point[], point: Point): { point: Point, distance: number } {
         let closest = 0;
         let min = this.distance(points[0], point);
         for (let i = 0; i < points.length; i++) {
             const d = this.distance(points[i], point);
             if (d < min) { min = d; closest = i; }
         }
-        return { point: points[closest], fastDistance: min };
+        return { point: points[closest], distance: min };
     }
 
     static closestRect(rects: Rect[], rect: Rect, from: string): any {
@@ -109,7 +103,7 @@ export class MathUtils {
                 const dB = this.distance(rects[i].a, rect.b);
                 if (dA < dB && dA < min) {
                     min = dA; closest = i; side = 'a';
-                } else  if (dB < dA && dB < min) {
+                } else if (dB < dA && dB < min) {
                     min = dA; closest = i; side = 'b';
                 }
             }
@@ -153,114 +147,22 @@ export class MathUtils {
         return Math.abs(total);
     }
 
-
-
-
-    static deltaTransformPoint(matrix, point)  {
-        const dx = point.x * matrix.a + point.y * matrix.c + 0;
-        const dy = point.x * matrix.b + point.y * matrix.d + 0;
-        return { x: dx, y: dy };
-    }
-
-    static decomposeMatrix(matrix) {
-        // @see https://gist.github.com/2052247
-
-        // calculate delta transform point
-        const px = this.deltaTransformPoint(matrix, { x: 0, y: 1 });
-        const py = this.deltaTransformPoint(matrix, { x: 1, y: 0 });
-
-        // calculate skew
-        const skewX = ((180 / Math.PI) * Math.atan2(px.y, px.x) - 90);
-        const skewY = ((180 / Math.PI) * Math.atan2(py.y, py.x));
-
-        return {
-            translateX: matrix.e,
-            translateY: matrix.f,
-            scaleX: Math.sqrt(matrix.a * matrix.a + matrix.b * matrix.b),
-            scaleY: Math.sqrt(matrix.c * matrix.c + matrix.d * matrix.d),
-            skewX: skewX,
-            skewY: skewY,
-            rotation: skewX // rotation is the same as skew x
-        };
-    }
-
-
-
-    static adj(m) { // Compute the adjugate of m
-        return [
-            m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4],
-            m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5],
-            m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]
-        ];
-    }
-    static multmm(a, b) { // multiply two matrices
-        const c = Array(9);
-        for (let i = 0; i !== 3; ++i) {
-            for (let j = 0; j !== 3; ++j) {
-                let cij = 0;
-                for (let k = 0; k !== 3; ++k) {
-                    cij += a[3 * i + k] * b [3 * k + j];
-                }
-                c[3 * i + j] = cij;
-            }
-        }
-        return c;
-    }
-    static multmv(m, v) { // multiply matrix and vector
-        return [
-            m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
-            m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
-            m[6] * v[0] + m[7] * v[1] + m[8] * v[2]
-        ];
-    }
-    static pdbg(m, v) {
-        const r = this.multmv(m, v);
-        return r + " (" + r[0] / r[2] + ", " + r[1] / r[2] + ")";
-    }
-    static basisToPoints(x1, y1, x2, y2, x3, y3, x4, y4) {
-        const m = [
-            x1, x2, x3,
-            y1, y2, y3,
-            1,  1,  1
-        ];
-        const v = this.multmv(this.adj(m), [x4, y4, 1]);
-        return this.multmm(m, [
-            v[0], 0, 0,
-            0, v[1], 0,
-            0, 0, v[2]
-        ]);
-      }
-    static general2DProjection(
-        x1s, y1s, x1d, y1d,
-        x2s, y2s, x2d, y2d,
-        x3s, y3s, x3d, y3d,
-        x4s, y4s, x4d, y4d
-    ) {
-        const s = this.basisToPoints(x1s, y1s, x2s, y2s, x3s, y3s, x4s, y4s);
-        const d = this.basisToPoints(x1d, y1d, x2d, y2d, x3d, y3d, x4d, y4d);
-        return this.multmm(d, this.adj(s));
-    }
-    static transform2d(center: Point, x1, y1, x2, y2, x3, y3, x4, y4) {
-        const w = center.x, h = center.y;
-        let t = this.general2DProjection(0, 0, x1, y1, w, 0, x2, y2, 0, h, x3, y3, w, h, x4, y4);
-        for (let i = 0; i !== 9; ++i) { t[i] = t[i]  / t[8]; }
-        t = [t[0], t[3], 0, t[6],
-             t[1], t[4], 0, t[7],
-             0   , 0   , 1, 0   ,
-             t[2], t[5], 0, t[8]];
-        const result = "matrix3d(" + t.join(", ") + ")";
-        // elt.style["-webkit-transform"] = t;
-        // elt.style["-moz-transform"] = t;
-        // elt.style["-o-transform"] = t;
-        // elt.style.transform = t;
-        return result;
-    }
-
-
-
-
     static sortPoints(points: Point[]) {
         return points.sort((a, b) => a.x === b.x ? a.y - b.y : a.x - b.x);
+    }
+
+    static sortCorners(points: Point[]) {
+        const left = Math.min(Math.min(points[0].x, points[1].x), Math.min(points[2].x, points[3].x));
+        const right = Math.max(Math.max(points[0].x, points[1].x), Math.max(points[2].x, points[3].x));
+        const top = Math.min(Math.min(points[0].y, points[1].y), Math.min(points[2].y, points[3].y));
+        const bottom = Math.max(Math.max(points[0].y, points[1].y), Math.max(points[2].y, points[3].y));
+
+        const topLeft = this.closestPoint(points, { x: left, y: top }).point;
+        const topRight = this.closestPoint(points, { x: right, y: top }).point;
+        const bottomLeft = this.closestPoint(points, { x: left, y: bottom }).point;
+        const bottomRight = this.closestPoint(points, { x: right, y: bottom }).point;
+
+        return { topLeft, topRight, bottomLeft, bottomRight };
     }
 
     static lineIntersect(lineA: Rect, lineB: Rect) {
@@ -287,6 +189,39 @@ export class MathUtils {
             array[i] = array[j];
             array[j] = temp;
         }
+    }
+
+    static invert_3x3(origin) {
+        const t1 = origin[4];
+        const t2 = origin[8];
+        const t4 = origin[5];
+        const t5 = origin[7];
+        const t8 = origin[0];
+
+        const t9 = t8 * t1;
+        const t11 = t8 * t4;
+        const t13 = origin[3];
+        const t14 = origin[1];
+        const t15 = t13 * t14;
+        const t17 = origin[2];
+        const t18 = t13 * t17;
+        const t20 = origin[6];
+        const t21 = t20 * t14;
+        const t23 = t20 * t17;
+        const t26 = 1.0 / (t9 * t2 - t11 * t5 - t15 * t2 + t18 * t5 + t21 * t4 - t23 * t1);
+
+        const inverted = [];
+        inverted[0] = (t1 * t2 - t4 * t5) * t26;
+        inverted[1] = -(t14 * t2 - t17 * t5) * t26;
+        inverted[2] = -(-t14 * t4 + t17 * t1) * t26;
+        inverted[3] = -(t13 * t2 - t4 * t20) * t26;
+        inverted[4] = (t8 * t2 - t23) * t26;
+        inverted[5] = -(t11 - t18) * t26;
+        inverted[6] = -(-t13 * t5 + t1 * t20) * t26;
+        inverted[7] = -(t8 * t5 - t21) * t26;
+        inverted[8] = (t9 - t15) * t26;
+
+        return inverted;
     }
 
 }
